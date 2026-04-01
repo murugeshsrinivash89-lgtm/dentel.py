@@ -32,172 +32,173 @@ if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
     img_array = np.array(image)
 
-    # ---------------- HASH ----------------
-    img_hash = hashlib.md5(image.tobytes()).hexdigest()
+    st.image(image, caption="Preview Image", use_column_width=True)
 
-    # ---------------- VALIDATION ----------------
-    gray = np.mean(img_array, axis=2)
+    # ---------------- BUTTON ----------------
+    if st.button("🔍 Analyze Image"):
 
-    color_variation = np.std(img_array[:,:,0] - img_array[:,:,1]) + np.std(img_array[:,:,1] - img_array[:,:,2])
-    gray_variation = np.std(gray)
+        # ---------- HASH ----------
+        img_hash = hashlib.md5(image.tobytes()).hexdigest()
 
-    if color_variation > 25:
-        st.error("❌ Invalid Image: Upload CBCT / Dental X-ray only")
-        st.stop()
+        # ---------- VALIDATION ----------
+        gray = np.mean(img_array, axis=2)
 
-    if gray_variation < 10:
-        st.error("❌ Poor quality scan")
-        st.stop()
+        color_variation = np.std(img_array[:,:,0] - img_array[:,:,1]) + np.std(img_array[:,:,1] - img_array[:,:,2])
+        gray_variation = np.std(gray)
 
-    # ---------------- MEMORY CHECK ----------------
-    if img_hash in st.session_state.memory:
+        if color_variation > 80:
+            st.error("❌ Enter valid CBCT / Dental X-ray image")
+            st.stop()
 
-        data = st.session_state.memory[img_hash]
+        if gray_variation < 5:
+            st.error("❌ Image too low quality")
+            st.stop()
 
-        ann_score = data["ann"]
-        cnn_score = data["cnn"]
-        risk = data["risk"]
-        findings = data["findings"]
-        explanation = data["explanation"]
-        porosity = data["porosity"]
-        viscosity = data["viscosity"]
-        healing_days = data["healing"]
+        # ---------- MEMORY CHECK ----------
+        if img_hash in st.session_state.memory:
 
-    else:
+            data = st.session_state.memory[img_hash]
 
-        # ---------------- PROCESS ----------------
-        with st.spinner("Analyzing CBCT..."):
-            time.sleep(1)
+            ann_score = data["ann"]
+            cnn_score = data["cnn"]
+            risk = data["risk"]
+            findings = data["findings"]
+            explanation = data["explanation"]
+            porosity = data["porosity"]
+            viscosity = data["viscosity"]
+            healing_days = data["healing"]
 
-            brightness = np.mean(gray)
-            contrast = np.std(gray)
-            edges = np.mean(np.abs(np.diff(gray, axis=0)))
+        else:
 
-            ann_score = brightness / 255
-            cnn_score = (contrast + edges) / 255
+            with st.spinner("Analyzing CBCT..."):
+                time.sleep(1)
 
-            ann_score = float(np.clip(ann_score, 0, 1))
-            cnn_score = float(np.clip(cnn_score, 0, 1))
+                brightness = np.mean(gray)
+                contrast = np.std(gray)
+                edges = np.mean(np.abs(np.diff(gray, axis=0)))
 
-            # ---------- PARAMETERS ----------
-            porosity = int(20 + contrast)
-            viscosity = int(30 + edges * 10)
-            healing_days = int(5 + cnn_score * 15)
+                ann_score = brightness / 255
+                cnn_score = (contrast + edges) / 255
 
-            score = (cnn_score * 0.7 + ann_score * 0.3)
+                ann_score = float(np.clip(ann_score, 0, 1))
+                cnn_score = float(np.clip(cnn_score, 0, 1))
 
-            # ---------- DECISION ----------
-            if score > 0.7:
-                risk = "HIGH"
-                findings = [
-                    "Severe Plaque Accumulation",
-                    "Heavy Calculus",
-                    "Advanced Gingival Recession",
-                    "Attachment Loss (>3 mm)",
-                    "Deep Pocket (>5 mm)"
-                ]
-                explanation = "Severe periodontal damage detected. Immediate treatment required."
+                porosity = int(20 + contrast)
+                viscosity = int(30 + edges * 10)
+                healing_days = int(5 + cnn_score * 15)
 
-            elif score > 0.4:
-                risk = "MODERATE"
-                findings = [
-                    "Dental Plaque",
-                    "Mild Calculus",
-                    "Gingival Recession",
-                    "Attachment Loss (1–2 mm)",
-                    "Shallow Pocket (3–4 mm)"
-                ]
-                explanation = "Moderate abnormalities detected. Early treatment recommended."
+                score = (cnn_score * 0.7 + ann_score * 0.3)
 
-            else:
-                risk = "LOW"
-                findings = [
-                    "Clean Tooth Structure",
-                    "Healthy Gingiva",
-                    "No Bone Loss",
-                    "Stable Attachment"
-                ]
-                explanation = "Healthy dental condition."
+                if score > 0.7:
+                    risk = "HIGH"
+                    findings = [
+                        "Severe Plaque Accumulation",
+                        "Heavy Calculus",
+                        "Advanced Gingival Recession",
+                        "Attachment Loss (>3 mm)",
+                        "Deep Pocket (>5 mm)"
+                    ]
+                    explanation = "Severe periodontal damage detected. Immediate treatment required."
 
-            # ---------- SAVE MEMORY ----------
-            st.session_state.memory[img_hash] = {
-                "ann": ann_score,
-                "cnn": cnn_score,
-                "risk": risk,
-                "findings": findings,
-                "explanation": explanation,
-                "porosity": porosity,
-                "viscosity": viscosity,
-                "healing": healing_days
-            }
+                elif score > 0.4:
+                    risk = "MODERATE"
+                    findings = [
+                        "Dental Plaque",
+                        "Mild Calculus",
+                        "Gingival Recession",
+                        "Attachment Loss (1–2 mm)",
+                        "Shallow Pocket (3–4 mm)"
+                    ]
+                    explanation = "Moderate abnormalities detected. Early treatment recommended."
 
-    # ---------------- VISUALS ----------------
-    norm = gray / np.max(gray)
+                else:
+                    risk = "LOW"
+                    findings = [
+                        "Clean Tooth Structure",
+                        "Healthy Gingiva",
+                        "No Bone Loss",
+                        "Stable Attachment"
+                    ]
+                    explanation = "Healthy dental condition."
 
-    heat = (norm * 0.6 + np.random.rand(*norm.shape) * 0.4)
-    heat = heat / np.max(heat)
+                # SAVE MEMORY
+                st.session_state.memory[img_hash] = {
+                    "ann": ann_score,
+                    "cnn": cnn_score,
+                    "risk": risk,
+                    "findings": findings,
+                    "explanation": explanation,
+                    "porosity": porosity,
+                    "viscosity": viscosity,
+                    "healing": healing_days
+                }
 
-    heatmap = np.zeros_like(img_array)
-    heatmap[:,:,0] = (heat ** 0.5) * 255
-    heatmap[:,:,1] = heat * 180
-    heatmap[:,:,2] = heat * 60
+        # ---------- VISUALS ----------
+        norm = gray / np.max(gray)
 
-    cnn_image = (img_array * 0.5 + heatmap * 0.7).astype(np.uint8)
+        heat = (norm * 0.6 + np.random.rand(*norm.shape) * 0.4)
+        heat = heat / np.max(heat)
 
-    ann_image = np.zeros_like(img_array)
-    ann_image[:,:,2] = gray
-    ann_image[:,:,1] = gray * 0.5
-    ann_image = ann_image.astype(np.uint8)
+        heatmap = np.zeros_like(img_array)
+        heatmap[:,:,0] = (heat ** 0.5) * 255
+        heatmap[:,:,1] = heat * 180
+        heatmap[:,:,2] = heat * 60
 
-    # ---------------- DISPLAY ----------------
-    st.markdown("## 🖼 AI Visualization")
+        cnn_image = (img_array * 0.5 + heatmap * 0.7).astype(np.uint8)
 
-    c1, c2, c3 = st.columns(3)
-    c1.image(image, caption="Original")
-    c2.image(ann_image, caption="ANN View")
-    c3.image(cnn_image, caption="CNN Heatmap")
+        ann_image = np.zeros_like(img_array)
+        ann_image[:,:,2] = gray
+        ann_image[:,:,1] = gray * 0.5
+        ann_image = ann_image.astype(np.uint8)
 
-    # ---------------- SCORES ----------------
-    st.markdown("## 🤖 AI Analysis")
+        # ---------- DISPLAY ----------
+        st.markdown("## 🖼 AI Visualization")
 
-    st.write("ANN Confidence")
-    st.progress(int(ann_score * 100))
+        c1, c2, c3 = st.columns(3)
+        c1.image(image, caption="Original")
+        c2.image(ann_image, caption="ANN View")
+        c3.image(cnn_image, caption="CNN Heatmap")
 
-    st.write("CNN Confidence")
-    st.progress(int(cnn_score * 100))
+        # ---------- SCORES ----------
+        st.markdown("## 🤖 AI Analysis")
 
-    # ---------------- PARAMETERS ----------------
-    st.markdown("## 🧪 Dental Parameters")
+        st.write("ANN Confidence")
+        st.progress(int(ann_score * 100))
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Porosity", f"{porosity}%")
-    col2.metric("Viscosity", viscosity)
-    col3.metric("Healing Days", f"{healing_days} days")
+        st.write("CNN Confidence")
+        st.progress(int(cnn_score * 100))
 
-    # ---------------- FINDINGS ----------------
-    st.markdown("## 🦷 Clinical Findings")
+        # ---------- PARAMETERS ----------
+        st.markdown("## 🧪 Dental Parameters")
 
-    for f in findings:
-        st.write("• " + f)
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Porosity", f"{porosity}%")
+        col2.metric("Viscosity", viscosity)
+        col3.metric("Healing Days", f"{healing_days} days")
 
-    # ---------------- EXPLANATION ----------------
-    st.markdown("## 🧠 Dentox AI Explanation")
-    st.info(explanation)
+        # ---------- FINDINGS ----------
+        st.markdown("## 🦷 Clinical Findings")
+        for f in findings:
+            st.write("• " + f)
 
-    # ---------------- RESULT ----------------
-    st.markdown("## 🧾 Diagnosis")
+        # ---------- EXPLANATION ----------
+        st.markdown("## 🧠 Dentox AI Explanation")
+        st.info(explanation)
 
-    if risk == "LOW":
-        st.success("Healthy Dental Condition")
-    elif risk == "MODERATE":
-        st.warning("Moderate Periodontal Risk")
-    else:
-        st.error("Severe Periodontal Disease")
+        # ---------- RESULT ----------
+        st.markdown("## 🧾 Diagnosis")
 
-    # ---------------- REPORT ----------------
-    st.markdown("## 📄 Download Report")
+        if risk == "LOW":
+            st.success("Healthy Dental Condition")
+        elif risk == "MODERATE":
+            st.warning("Moderate Periodontal Risk")
+        else:
+            st.error("Severe Periodontal Disease")
 
-    report = f"""
+        # ---------- REPORT ----------
+        st.markdown("## 📄 Download Report")
+
+        report = f"""
 Dentox AI Report
 
 ANN Score: {ann_score:.2f}
@@ -212,7 +213,7 @@ Explanation:
 Final Risk: {risk}
 """
 
-    st.download_button("Download Report", report, file_name="dentox_report.txt")
+        st.download_button("Download Report", report, file_name="dentox_report.txt")
 
 else:
-    st.info("Upload a CBCT / Dental X-ray to start analysis")
+    st.info("⬆ Upload image and click 'Analyze Image'")
