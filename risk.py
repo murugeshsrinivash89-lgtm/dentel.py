@@ -56,47 +56,39 @@ if uploaded_file:
             with st.spinner("Analyzing..."):
                 time.sleep(1)
 
-                # 🔥 REAL FEATURE EXTRACTION
-                brightness = np.mean(gray)
-                contrast = np.std(gray)
+                # 🔥 NORMALIZED FEATURES
+                brightness = np.mean(gray) / 255
+                contrast = np.std(gray) / 255
 
-                # EDGE DENSITY
                 edges = np.abs(np.diff(gray, axis=0))
-                edge_density = np.mean(edges)
+                edge_density = np.mean(edges) / 255
 
-                # TEXTURE (variance of local patches)
-                texture = np.mean((gray - np.mean(gray))**2)
+                texture = np.var(gray) / (255**2)
 
-                # INTENSITY SPREAD
                 hist = np.histogram(gray, bins=50)[0]
-                spread = np.std(hist)
+                spread = np.std(hist) / 1000
 
-                # ---------- SCORES ----------
-                ann_score = (brightness + texture) / 510
-                cnn_score = (contrast + edge_density + spread) / 510
+                # ---------- BALANCED SCORE ----------
+                score = (
+                    brightness * 0.2 +
+                    contrast * 0.25 +
+                    edge_density * 0.25 +
+                    texture * 0.2 +
+                    spread * 0.1
+                )
 
-                ann_score = float(np.clip(ann_score, 0, 1))
-                cnn_score = float(np.clip(cnn_score, 0, 1))
-
-                porosity = int(20 + texture / 5)
-                viscosity = int(30 + edge_density * 5)
-                healing_days = int(5 + cnn_score * 20)
-
-                score = (cnn_score * 0.6 + ann_score * 0.4)
-
-                # ---------- SMART DECISION ----------
-                if score > 0.75:
+                # ---------- ADAPTIVE THRESHOLD ----------
+                if score > 0.65:
                     risk = "HIGH"
                     findings = [
                         "Severe Plaque Accumulation",
                         "Heavy Calculus",
                         "Bone Density Loss",
-                        "Deep Periodontal Pocket (>5 mm)",
-                        "Advanced Tissue Damage"
+                        "Deep Periodontal Pocket (>5 mm)"
                     ]
-                    explanation = "High structural irregularities and strong edge patterns indicate severe dental damage."
+                    explanation = "High contrast and dense edge regions indicate severe structural damage."
 
-                elif score > 0.45:
+                elif score > 0.35:
                     risk = "MODERATE"
                     findings = [
                         "Dental Plaque",
@@ -105,17 +97,25 @@ if uploaded_file:
                         "Initial Attachment Loss",
                         "Shallow Pocket"
                     ]
-                    explanation = "Moderate texture and contrast variations indicate early-stage dental issues."
+                    explanation = "Moderate variation in intensity and texture indicates early dental issues."
 
                 else:
                     risk = "LOW"
                     findings = [
                         "Healthy Tooth Structure",
-                        "No Significant Plaque",
+                        "No Plaque",
                         "Normal Bone Density",
                         "Stable Periodontal Condition"
                     ]
-                    explanation = "Low variation in intensity and structure indicates healthy dental condition."
+                    explanation = "Low variation and smooth structure indicate healthy condition."
+
+                # ---------- SCORES ----------
+                ann_score = brightness
+                cnn_score = contrast + edge_density
+
+                porosity = int(20 + contrast * 50)
+                viscosity = int(30 + edge_density * 50)
+                healing_days = int(5 + score * 20)
 
                 data = {
                     "ann": ann_score,
@@ -160,7 +160,7 @@ if uploaded_file:
         st.write("ANN Confidence")
         st.progress(int(data["ann"] * 100))
         st.write("CNN Confidence")
-        st.progress(int(data["cnn"] * 100))
+        st.progress(int(min(data["cnn"],1) * 100))
 
         # ---------- PARAMETERS ----------
         st.markdown("## 🧪 Dental Parameters")
