@@ -15,11 +15,6 @@ st.markdown("""
     text-align: center;
     color: #00ffe0;
 }
-.block {
-    background-color:#111827;
-    padding:15px;
-    border-radius:10px;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -50,18 +45,6 @@ if uploaded_file:
     if st.session_state.analyze:
 
         gray = np.mean(img_array, axis=2)
-
-        # ---------- VALIDATION ----------
-        color_variation = np.std(img_array[:,:,0] - img_array[:,:,1]) + np.std(img_array[:,:,1] - img_array[:,:,2])
-        gray_variation = np.std(gray)
-
-        if color_variation > 120:
-            st.error("❌ Enter valid CBCT / Dental X-ray image")
-            st.stop()
-
-        if gray_variation < 3:
-            st.error("❌ Low quality image")
-            st.stop()
 
         # ---------- HASH ----------
         img_hash = hashlib.md5(image.tobytes()).hexdigest()
@@ -97,7 +80,7 @@ if uploaded_file:
                         "Attachment Loss (>3 mm)",
                         "Deep Pocket (>5 mm)"
                     ]
-                    explanation = "Advanced periodontal damage detected due to high structural variation and bone irregularities."
+                    explanation = "Severe periodontal damage due to strong structural irregularities."
 
                 elif score > 0.4:
                     risk = "MODERATE"
@@ -109,17 +92,17 @@ if uploaded_file:
                         "Gingival Pocket",
                         "Shallow Pocket (≤ 3–4 mm)"
                     ]
-                    explanation = "Moderate abnormalities detected. Early gum inflammation and plaque accumulation observed."
+                    explanation = "Moderate abnormalities like plaque and gum inflammation detected."
 
                 else:
                     risk = "LOW"
                     findings = [
+                        "Healthy Teeth",
                         "No Plaque",
-                        "Healthy Gingiva",
                         "No Bone Loss",
-                        "Stable Tooth Support"
+                        "Stable Structure"
                     ]
-                    explanation = "Healthy dental structure with no significant abnormalities."
+                    explanation = "Dental structure appears normal."
 
                 data = {
                     "ann": ann_score,
@@ -132,10 +115,12 @@ if uploaded_file:
                     "healing": healing_days
                 }
 
+                # SAVE MEMORY
                 st.session_state.memory[img_hash] = data
 
         # ---------- VISUALS ----------
         norm = gray / np.max(gray)
+
         heat = (norm * 0.6 + np.random.rand(*norm.shape) * 0.4)
         heat = heat / np.max(heat)
 
@@ -186,9 +171,9 @@ if uploaded_file:
         if data["risk"] == "LOW":
             st.success("Healthy Condition")
         elif data["risk"] == "MODERATE":
-            st.warning("Moderate Periodontal Risk")
+            st.warning("Moderate Risk Detected")
         else:
-            st.error("Severe Periodontal Disease")
+            st.error("Severe Condition Detected")
 
         # ---------- REPORT ----------
         st.markdown("## 📄 Download Report")
