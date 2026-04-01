@@ -15,6 +15,10 @@ st.markdown("""
     text-align: center;
     color: #00ffe0;
 }
+.section {
+    font-size: 26px;
+    margin-top: 20px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -32,44 +36,41 @@ if uploaded_file:
     with st.spinner("Analyzing..."):
         time.sleep(1)
 
-        # ---------- ANN (BLUE TONE) ----------
-        gray = np.mean(img_array, axis=2)
+        # ---------- ANN (BLUE AI LOOK) ----------
+        ann_gray = np.mean(img_array, axis=2)
 
         ann_image = np.zeros_like(img_array)
-        ann_image[:,:,0] = gray * 0.3
-        ann_image[:,:,1] = gray * 0.6
-        ann_image[:,:,2] = gray
+        ann_image[:,:,0] = ann_gray * 0.3
+        ann_image[:,:,1] = ann_gray * 0.6
+        ann_image[:,:,2] = ann_gray
+
         ann_image = np.clip(ann_image, 0, 255).astype(np.uint8)
 
-        # ---------- CNN (STRONG HEATMAP) ----------
-        edges = np.zeros_like(gray)
+        # ---------- CNN (HEATMAP DAMAGE) ----------
+        kernel = np.array([
+            [-1,-1,-1],
+            [-1, 8,-1],
+            [-1,-1,-1]
+        ])
 
-        for i in range(1, gray.shape[0]-1):
-            for j in range(1, gray.shape[1]-1):
-                value = (
-                    -gray[i-1,j-1] - gray[i-1,j] - gray[i-1,j+1]
-                    -gray[i,j-1]   + 8*gray[i,j] - gray[i,j+1]
-                    -gray[i+1,j-1] - gray[i+1,j] - gray[i+1,j+1]
-                )
-                edges[i,j] = abs(value)
+        edges = np.zeros((img_array.shape[0], img_array.shape[1]))
 
-        # normalize safely
-        max_val = np.max(edges)
-        if max_val != 0:
-            edges = edges / max_val
+        for i in range(1, img_array.shape[0]-1):
+            for j in range(1, img_array.shape[1]-1):
+                region = img_array[i-1:i+2, j-1:j+2, 0]
+                edges[i,j] = np.sum(region * kernel)
 
-        # heatmap colors
-        heatmap = np.zeros_like(img_array)
-        heatmap[:,:,0] = edges * 255
-        heatmap[:,:,1] = edges * 180
-        heatmap[:,:,2] = edges * 30
-        heatmap = heatmap.astype(np.uint8)
+        edges = np.clip(edges, 0, 255)
 
-        # blend
-        alpha = 0.7
-        cnn_image = (img_array * 0.5 + heatmap * alpha).astype(np.uint8)
+        cnn_image = np.zeros_like(img_array)
 
-        # ---------- AI SCORES ----------
+        cnn_image[:,:,0] = edges           # RED (damage)
+        cnn_image[:,:,1] = edges * 0.5     # YELLOW effect
+        cnn_image[:,:,2] = edges * 0.1
+
+        cnn_image = np.clip(cnn_image, 0, 255).astype(np.uint8)
+
+        # ---------- SCORES ----------
         ann_score = float(np.random.uniform(0.2, 0.9))
         cnn_score = float(np.random.uniform(0.2, 0.9))
 
@@ -86,7 +87,7 @@ if uploaded_file:
         else:
             risk = "LOW"
 
-    # ---------------- DISPLAY ----------------
+    # ---------------- IMAGE DISPLAY ----------------
     st.markdown("## 🖼 AI Visual Comparison")
 
     c1, c2, c3 = st.columns(3)
@@ -100,7 +101,7 @@ if uploaded_file:
     with c3:
         st.image(cnn_image, caption="CNN Heatmap (Damage Detection)", use_column_width=True)
 
-    # ---------------- AI ANALYSIS ----------------
+    # ---------------- AI SCORES ----------------
     st.markdown("## 🤖 AI Analysis")
 
     st.write("ANN Confidence")
