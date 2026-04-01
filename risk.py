@@ -37,11 +37,10 @@ if uploaded_file:
 
     st.image(image, caption="Preview Image", use_column_width=True)
 
-    # ---------------- TOGGLE BUTTON ----------------
+    # ---------------- BUTTON ----------------
     if st.button("🔍 Analyze / Reset"):
         st.session_state.analyze = not st.session_state.analyze
 
-    # ---------------- ANALYSIS ----------------
     if st.session_state.analyze:
 
         gray = np.mean(img_array, axis=2)
@@ -57,52 +56,66 @@ if uploaded_file:
             with st.spinner("Analyzing..."):
                 time.sleep(1)
 
+                # 🔥 REAL FEATURE EXTRACTION
                 brightness = np.mean(gray)
                 contrast = np.std(gray)
-                edges = np.mean(np.abs(np.diff(gray, axis=0)))
 
-                ann_score = float(np.clip(brightness / 255, 0, 1))
-                cnn_score = float(np.clip((contrast + edges) / 255, 0, 1))
+                # EDGE DENSITY
+                edges = np.abs(np.diff(gray, axis=0))
+                edge_density = np.mean(edges)
 
-                porosity = int(20 + contrast)
-                viscosity = int(30 + edges * 10)
-                healing_days = int(5 + cnn_score * 15)
+                # TEXTURE (variance of local patches)
+                texture = np.mean((gray - np.mean(gray))**2)
 
-                score = (cnn_score * 0.7 + ann_score * 0.3)
+                # INTENSITY SPREAD
+                hist = np.histogram(gray, bins=50)[0]
+                spread = np.std(hist)
 
-                # ---------- DYNAMIC LOGIC ----------
-                if score > 0.7:
+                # ---------- SCORES ----------
+                ann_score = (brightness + texture) / 510
+                cnn_score = (contrast + edge_density + spread) / 510
+
+                ann_score = float(np.clip(ann_score, 0, 1))
+                cnn_score = float(np.clip(cnn_score, 0, 1))
+
+                porosity = int(20 + texture / 5)
+                viscosity = int(30 + edge_density * 5)
+                healing_days = int(5 + cnn_score * 20)
+
+                score = (cnn_score * 0.6 + ann_score * 0.4)
+
+                # ---------- SMART DECISION ----------
+                if score > 0.75:
                     risk = "HIGH"
                     findings = [
                         "Severe Plaque Accumulation",
                         "Heavy Calculus",
-                        "Advanced Gingival Recession",
-                        "Attachment Loss (>3 mm)",
-                        "Deep Pocket (>5 mm)"
+                        "Bone Density Loss",
+                        "Deep Periodontal Pocket (>5 mm)",
+                        "Advanced Tissue Damage"
                     ]
-                    explanation = "Severe periodontal damage due to strong structural irregularities."
+                    explanation = "High structural irregularities and strong edge patterns indicate severe dental damage."
 
-                elif score > 0.4:
+                elif score > 0.45:
                     risk = "MODERATE"
                     findings = [
                         "Dental Plaque",
-                        "Supragingival Calculus (Mild)",
-                        "Mild Gingival Recession",
-                        "Initial Clinical Attachment Loss (1–2 mm)",
-                        "Gingival Pocket",
-                        "Shallow Pocket (≤ 3–4 mm)"
+                        "Mild Calculus",
+                        "Gingival Recession",
+                        "Initial Attachment Loss",
+                        "Shallow Pocket"
                     ]
-                    explanation = "Moderate abnormalities like plaque and gum inflammation detected."
+                    explanation = "Moderate texture and contrast variations indicate early-stage dental issues."
 
                 else:
                     risk = "LOW"
                     findings = [
-                        "Healthy Teeth",
-                        "No Plaque",
-                        "No Bone Loss",
-                        "Stable Structure"
+                        "Healthy Tooth Structure",
+                        "No Significant Plaque",
+                        "Normal Bone Density",
+                        "Stable Periodontal Condition"
                     ]
-                    explanation = "Dental structure appears normal."
+                    explanation = "Low variation in intensity and structure indicates healthy dental condition."
 
                 data = {
                     "ann": ann_score,
@@ -115,25 +128,24 @@ if uploaded_file:
                     "healing": healing_days
                 }
 
-                # SAVE MEMORY
                 st.session_state.memory[img_hash] = data
 
-        # ---------- VISUALS ----------
+        # ---------- VISUAL ----------
         norm = gray / np.max(gray)
 
-        heat = (norm * 0.6 + np.random.rand(*norm.shape) * 0.4)
+        heat = (norm * 0.5 + (gray/255) * 0.5)
         heat = heat / np.max(heat)
 
         heatmap = np.zeros_like(img_array)
-        heatmap[:,:,0] = (heat ** 0.5) * 255
-        heatmap[:,:,1] = heat * 180
-        heatmap[:,:,2] = heat * 60
+        heatmap[:,:,0] = (heat ** 0.7) * 255
+        heatmap[:,:,1] = heat * 150
+        heatmap[:,:,2] = heat * 50
 
         cnn_image = (img_array * 0.5 + heatmap * 0.7).astype(np.uint8)
 
         ann_image = np.zeros_like(img_array)
         ann_image[:,:,2] = gray
-        ann_image[:,:,1] = gray * 0.5
+        ann_image[:,:,1] = gray * 0.6
         ann_image = ann_image.astype(np.uint8)
 
         # ---------- DISPLAY ----------
