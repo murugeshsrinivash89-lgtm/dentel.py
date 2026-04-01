@@ -32,7 +32,7 @@ if uploaded_file:
     with st.spinner("Analyzing..."):
         time.sleep(1)
 
-        # ---------- ANN (BLUE) ----------
+        # ---------- ANN (BLUE AI LOOK) ----------
         gray = np.mean(img_array, axis=2)
 
         ann_image = np.zeros_like(img_array)
@@ -41,29 +41,20 @@ if uploaded_file:
         ann_image[:,:,2] = gray
         ann_image = np.clip(ann_image, 0, 255).astype(np.uint8)
 
-        # ---------- CNN (HEATMAP) ----------
-        edges = np.zeros_like(gray)
+        # ---------- CNN (RANDOM HEATMAP STYLE) ----------
+        norm = gray / np.max(gray)
 
-        for i in range(1, gray.shape[0]-1):
-            for j in range(1, gray.shape[1]-1):
-                value = (
-                    -gray[i-1,j-1] - gray[i-1,j] - gray[i-1,j+1]
-                    -gray[i,j-1]   + 8*gray[i,j] - gray[i,j+1]
-                    -gray[i+1,j-1] - gray[i+1,j] - gray[i+1,j+1]
-                )
-                edges[i,j] = abs(value)
-
-        max_val = np.max(edges)
-        if max_val != 0:
-            edges = edges / max_val
+        noise = np.random.rand(*norm.shape) * 0.5
+        heat = norm * 0.6 + noise
+        heat = heat / np.max(heat)
 
         heatmap = np.zeros_like(img_array)
-        heatmap[:,:,0] = edges * 255
-        heatmap[:,:,1] = edges * 180
-        heatmap[:,:,2] = edges * 30
+        heatmap[:,:,0] = (heat ** 0.5) * 255
+        heatmap[:,:,1] = heat * 200
+        heatmap[:,:,2] = heat * 50
         heatmap = heatmap.astype(np.uint8)
 
-        cnn_image = (img_array * 0.5 + heatmap * 0.7).astype(np.uint8)
+        cnn_image = (img_array * 0.4 + heatmap * 0.8).astype(np.uint8)
 
         # ---------- SCORES ----------
         ann_score = 0.72
@@ -126,17 +117,17 @@ if uploaded_file:
     explanation = """
 Dentox AI has detected early-stage periodontal involvement.
 
-Presence of dental plaque and mild calculus indicates bacterial accumulation on tooth surfaces.
+Presence of dental plaque and mild calculus indicates bacterial accumulation.
 
-Gingival recession suggests early gum tissue loss, possibly due to inflammation or improper oral hygiene.
+Gingival recession suggests early gum tissue loss.
 
-Initial attachment loss (1–2 mm) indicates the beginning of periodontal breakdown.
+Initial attachment loss (1–2 mm) indicates beginning periodontal damage.
 
-False pocket formation is due to gingival swelling rather than bone loss.
+False pocket formation is due to gingival swelling.
 
-Shallow pocket depth (≤ 3–4 mm) confirms mild periodontal condition.
+Shallow pocket depth confirms mild periodontal condition.
 
-Overall condition suggests early gingivitis transitioning towards mild periodontitis, requiring preventive care.
+Preventive dental care is recommended.
 """
 
     st.info(explanation)
@@ -149,7 +140,6 @@ Overall condition suggests early gingivitis transitioning towards mild periodont
     st.markdown("## 📄 Download Report")
 
     report = "Dentox AI Clinical Report\n\n"
-
     report += f"ANN Score: {ann_score}\n"
     report += f"CNN Score: {cnn_score}\n\n"
 
