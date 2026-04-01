@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 import time
+import hashlib
 
 st.set_page_config(page_title="Dentox AI", layout="wide")
 
@@ -19,6 +20,10 @@ st.markdown("""
 
 st.markdown('<div class="title">🦷 Dentox AI - Clinical Dental AI</div>', unsafe_allow_html=True)
 
+# ---------------- MEMORY ----------------
+if "memory" not in st.session_state:
+    st.session_state.memory = {}
+
 # ---------------- UPLOAD ----------------
 uploaded_file = st.file_uploader("Upload CBCT / Dental X-ray", type=["jpg","png","jpeg"])
 
@@ -26,6 +31,9 @@ if uploaded_file:
 
     image = Image.open(uploaded_file).convert("RGB")
     img_array = np.array(image)
+
+    # ---------------- HASH ----------------
+    img_hash = hashlib.md5(image.tobytes()).hexdigest()
 
     # ---------------- VALIDATION ----------------
     gray = np.mean(img_array, axis=2)
@@ -41,105 +49,105 @@ if uploaded_file:
         st.error("❌ Poor quality scan")
         st.stop()
 
-    # ---------------- PROCESS ----------------
-    with st.spinner("Analyzing CBCT..."):
-        time.sleep(1)
+    # ---------------- MEMORY CHECK ----------------
+    if img_hash in st.session_state.memory:
 
-        # ---------- ANN ----------
-        brightness = np.mean(gray)
-        ann_score = brightness / 255
+        data = st.session_state.memory[img_hash]
 
-        # ---------- CNN ----------
-        contrast = np.std(gray)
-        edges = np.mean(np.abs(np.diff(gray, axis=0)))
-        cnn_score = (contrast + edges) / 255
+        ann_score = data["ann"]
+        cnn_score = data["cnn"]
+        risk = data["risk"]
+        findings = data["findings"]
+        explanation = data["explanation"]
+        porosity = data["porosity"]
+        viscosity = data["viscosity"]
+        healing_days = data["healing"]
 
-        ann_score = float(np.clip(ann_score, 0, 1))
-        cnn_score = float(np.clip(cnn_score, 0, 1))
+    else:
 
-        # ---------- HEATMAP ----------
-        norm = gray / np.max(gray)
-        heat = (norm * 0.6 + np.random.rand(*norm.shape) * 0.4)
-        heat = heat / np.max(heat)
+        # ---------------- PROCESS ----------------
+        with st.spinner("Analyzing CBCT..."):
+            time.sleep(1)
 
-        heatmap = np.zeros_like(img_array)
-        heatmap[:,:,0] = (heat ** 0.5) * 255
-        heatmap[:,:,1] = heat * 180
-        heatmap[:,:,2] = heat * 60
-        heatmap = heatmap.astype(np.uint8)
+            brightness = np.mean(gray)
+            contrast = np.std(gray)
+            edges = np.mean(np.abs(np.diff(gray, axis=0)))
 
-        cnn_image = (img_array * 0.5 + heatmap * 0.7).astype(np.uint8)
+            ann_score = brightness / 255
+            cnn_score = (contrast + edges) / 255
 
-        # ---------- ANN VISUAL ----------
-        ann_image = np.zeros_like(img_array)
-        ann_image[:,:,2] = gray
-        ann_image[:,:,1] = gray * 0.5
-        ann_image = ann_image.astype(np.uint8)
+            ann_score = float(np.clip(ann_score, 0, 1))
+            cnn_score = float(np.clip(cnn_score, 0, 1))
 
-        # ---------- PARAMETERS ----------
-        porosity = int(20 + contrast)
-        viscosity = int(30 + edges * 10)
-        healing_days = int(5 + cnn_score * 15)
+            # ---------- PARAMETERS ----------
+            porosity = int(20 + contrast)
+            viscosity = int(30 + edges * 10)
+            healing_days = int(5 + cnn_score * 15)
 
-        # ---------- SMART RISK BALANCE ----------
-        score = (cnn_score * 0.7 + ann_score * 0.3)
+            score = (cnn_score * 0.7 + ann_score * 0.3)
 
-        if score > 0.7:
-            risk = "HIGH"
-        elif score > 0.4:
-            risk = "MODERATE"
-        else:
-            risk = "LOW"
+            # ---------- DECISION ----------
+            if score > 0.7:
+                risk = "HIGH"
+                findings = [
+                    "Severe Plaque Accumulation",
+                    "Heavy Calculus",
+                    "Advanced Gingival Recession",
+                    "Attachment Loss (>3 mm)",
+                    "Deep Pocket (>5 mm)"
+                ]
+                explanation = "Severe periodontal damage detected. Immediate treatment required."
 
-        # ---------- FINDINGS ----------
-        if risk == "HIGH":
-            findings = [
-                "Severe Plaque Accumulation",
-                "Heavy Calculus",
-                "Advanced Gingival Recession",
-                "Attachment Loss (>3 mm)",
-                "Deep Pocket (>5 mm)"
-            ]
+            elif score > 0.4:
+                risk = "MODERATE"
+                findings = [
+                    "Dental Plaque",
+                    "Mild Calculus",
+                    "Gingival Recession",
+                    "Attachment Loss (1–2 mm)",
+                    "Shallow Pocket (3–4 mm)"
+                ]
+                explanation = "Moderate abnormalities detected. Early treatment recommended."
 
-            explanation = """
-Severe periodontal damage detected.
+            else:
+                risk = "LOW"
+                findings = [
+                    "Clean Tooth Structure",
+                    "Healthy Gingiva",
+                    "No Bone Loss",
+                    "Stable Attachment"
+                ]
+                explanation = "Healthy dental condition."
 
-High contrast and irregular patterns indicate structural degradation.
+            # ---------- SAVE MEMORY ----------
+            st.session_state.memory[img_hash] = {
+                "ann": ann_score,
+                "cnn": cnn_score,
+                "risk": risk,
+                "findings": findings,
+                "explanation": explanation,
+                "porosity": porosity,
+                "viscosity": viscosity,
+                "healing": healing_days
+            }
 
-Immediate dental treatment required.
-"""
+    # ---------------- VISUALS ----------------
+    norm = gray / np.max(gray)
 
-        elif risk == "MODERATE":
-            findings = [
-                "Dental Plaque",
-                "Mild Calculus",
-                "Gingival Recession",
-                "Attachment Loss (1–2 mm)",
-                "Shallow Pocket (3–4 mm)"
-            ]
+    heat = (norm * 0.6 + np.random.rand(*norm.shape) * 0.4)
+    heat = heat / np.max(heat)
 
-            explanation = """
-Moderate abnormalities detected.
+    heatmap = np.zeros_like(img_array)
+    heatmap[:,:,0] = (heat ** 0.5) * 255
+    heatmap[:,:,1] = heat * 180
+    heatmap[:,:,2] = heat * 60
 
-Early gum damage and bacterial accumulation present.
+    cnn_image = (img_array * 0.5 + heatmap * 0.7).astype(np.uint8)
 
-Condition is reversible with treatment.
-"""
-
-        else:
-            findings = [
-                "Clean Tooth Structure",
-                "Healthy Gingiva",
-                "No Bone Loss",
-                "Stable Attachment",
-                "No Pocket Formation"
-            ]
-
-            explanation = """
-Healthy dental condition detected.
-
-No significant abnormalities observed.
-"""
+    ann_image = np.zeros_like(img_array)
+    ann_image[:,:,2] = gray
+    ann_image[:,:,1] = gray * 0.5
+    ann_image = ann_image.astype(np.uint8)
 
     # ---------------- DISPLAY ----------------
     st.markdown("## 🖼 AI Visualization")
