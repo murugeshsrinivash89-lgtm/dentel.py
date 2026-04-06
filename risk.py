@@ -1,211 +1,156 @@
 import streamlit as st
 import numpy as np
-from PIL import Image
-import time
-import hashlib
-
-st.set_page_config(page_title="Dentox AI", layout="wide")
+import pandas as pd
 
 # ---------------- STYLE ----------------
 st.markdown("""
 <style>
-.title {
-    font-size: 42px;
+.big-title {
+    font-size: 32px;
     font-weight: bold;
     text-align: center;
-    color: #00ffe0;
+    color: #00FFFF;
+}
+.card {
+    background-color: #111;
+    padding: 20px;
+    border-radius: 15px;
+}
+.result {
+    font-size: 24px;
+    font-weight: bold;
+    text-align: center;
 }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="title">🦷 Dentox AI - Clinical Dental AI</div>', unsafe_allow_html=True)
+# ---------------- TITLE ----------------
+st.markdown('<div class="big-title">VYNTARA AI Health Dashboard</div>', unsafe_allow_html=True)
 
-# ---------------- SESSION ----------------
-if "memory" not in st.session_state:
-    st.session_state.memory = {}
+# ---------------- THEORY SECTION ----------------
+st.markdown("## 📘 AIM")
+st.write("To monitor heart rate and stress levels using HRV parameters (RMSSD, SDNN) and provide real-time analysis.")
 
-if "analyze" not in st.session_state:
-    st.session_state.analyze = False
+st.markdown("## ⚙️ PRINCIPLE")
+st.write("""
+- HRV (Heart Rate Variability) is used to assess stress.
+- RMSSD → short-term variability  
+- SDNN → overall variability  
+- Low HRV = High Stress  
+- High HRV = Relaxed state  
+""")
 
-# ---------------- UPLOAD ----------------
-uploaded_file = st.file_uploader("Upload CBCT / Dental X-ray", type=["jpg","png","jpeg"])
+st.markdown("## 🧪 PROCEDURE")
+st.write("""
+1. Collect heart rate data  
+2. Calculate RMSSD and SDNN  
+3. Apply threshold-based logic  
+4. Classify state (Normal / Stress / High HR)  
+5. Display results and graph  
+""")
 
-if uploaded_file:
+# ---------------- TABS ----------------
+tab1, tab2 = st.tabs(["💓 Monitor", "🧠 Stress Quiz"])
 
-    image = Image.open(uploaded_file).convert("RGB")
-    img_array = np.array(image)
+# ================= MONITOR =================
+with tab1:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
 
-    st.image(image, caption="Preview Image", use_column_width=True)
+    col1, col2, col3 = st.columns(3)
 
-    # ---------------- BUTTON ----------------
-    if st.button("🔍 Analyze / Reset"):
-        st.session_state.analyze = not st.session_state.analyze
+    with col1:
+        hr = st.slider("Heart Rate", 50, 150, 80)
 
-    if st.session_state.analyze:
+    with col2:
+        rmssd = st.slider("RMSSD", 0.01, 0.1, 0.05)
 
-        gray = np.mean(img_array, axis=2)
+    with col3:
+        sdnn = st.slider("SDNN", 0.01, 0.1, 0.05)
 
-        # ---------- HASH ----------
-        img_hash = hashlib.md5(image.tobytes()).hexdigest()
+    # -------- LOGIC --------
+    if hr > 110:
+        state = "HIGH HR"
+        color = "red"
+    elif rmssd < 0.04 and sdnn < 0.05:
+        state = "STRESS"
+        color = "orange"
+    else:
+        state = "NORMAL"
+        color = "green"
 
-        # ---------- MEMORY ----------
-        if img_hash in st.session_state.memory:
-            data = st.session_state.memory[img_hash]
+    st.markdown(f'<div class="result" style="color:{color}">{state}</div>', unsafe_allow_html=True)
 
+    # -------- GRAPH --------
+    t = np.linspace(0, 5, 200)
+    signal = 0.6 * np.sin(2 * np.pi * (hr/60) * t)
+    signal += 0.05 * np.random.randn(len(t))
+
+    st.line_chart(signal)
+
+    # -------- TABLE --------
+    st.subheader("📊 Live Data Table")
+
+    data = pd.DataFrame({
+        "Heart Rate": [hr],
+        "RMSSD": [rmssd],
+        "SDNN": [sdnn],
+        "State": [state]
+    })
+
+    st.dataframe(data, use_container_width=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ================= QUIZ =================
+with tab2:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+
+    st.subheader("🧠 Advanced Stress Quiz")
+
+    q1 = st.radio("1. Do you feel tired often?", ["Yes", "No"])
+    q2 = st.radio("2. Sleep quality?", ["Good", "Average", "Bad"])
+    q3 = st.radio("3. Mood today?", ["Happy", "Neutral", "Stressed"])
+    q4 = st.radio("4. Do you feel anxious?", ["Yes", "Sometimes", "No"])
+    q5 = st.radio("5. Work pressure?", ["Low", "Medium", "High"])
+    q6 = st.radio("6. Do you overthink?", ["Yes", "No"])
+    q7 = st.radio("7. Energy level?", ["High", "Normal", "Low"])
+    q8 = st.radio("8. Focus level?", ["Good", "Average", "Poor"])
+
+    if st.button("Calculate Stress"):
+
+        score = 0
+
+        if q1 == "Yes": score += 1
+        if q2 == "Bad": score += 2
+        if q3 == "Stressed": score += 2
+        if q4 == "Yes": score += 2
+        if q4 == "Sometimes": score += 1
+        if q5 == "High": score += 2
+        if q6 == "Yes": score += 1
+        if q7 == "Low": score += 2
+        if q8 == "Poor": score += 2
+
+        # -------- RESULT --------
+        if score >= 8:
+            result = "HIGH STRESS"
+            color = "red"
+        elif score >= 4:
+            result = "MODERATE STRESS"
+            color = "orange"
         else:
-            with st.spinner("Analyzing..."):
-                time.sleep(1)
+            result = "LOW STRESS"
+            color = "green"
 
-                # 🔥 NORMALIZED FEATURES
-                brightness = np.mean(gray) / 255
-                contrast = np.std(gray) / 255
+        st.markdown(f'<div class="result" style="color:{color}">{result}</div>', unsafe_allow_html=True)
 
-                edges = np.abs(np.diff(gray, axis=0))
-                edge_density = np.mean(edges) / 255
+        # -------- TABLE --------
+        st.subheader("📋 Quiz Summary")
 
-                texture = np.var(gray) / (255**2)
+        quiz_data = pd.DataFrame({
+            "Score": [score],
+            "Stress Level": [result]
+        })
 
-                hist = np.histogram(gray, bins=50)[0]
-                spread = np.std(hist) / 1000
+        st.table(quiz_data)
 
-                # ---------- BALANCED SCORE ----------
-                score = (
-                    brightness * 0.2 +
-                    contrast * 0.25 +
-                    edge_density * 0.25 +
-                    texture * 0.2 +
-                    spread * 0.1
-                )
-
-                # ---------- ADAPTIVE THRESHOLD ----------
-                if score > 0.65:
-                    risk = "HIGH"
-                    findings = [
-                        "Severe Plaque Accumulation",
-                        "Heavy Calculus",
-                        "Bone Density Loss",
-                        "Deep Periodontal Pocket (>5 mm)"
-                    ]
-                    explanation = "High contrast and dense edge regions indicate severe structural damage."
-
-                elif score > 0.35:
-                    risk = "MODERATE"
-                    findings = [
-                        "Dental Plaque",
-                        "Mild Calculus",
-                        "Gingival Recession",
-                        "Initial Attachment Loss",
-                        "Shallow Pocket"
-                    ]
-                    explanation = "Moderate variation in intensity and texture indicates early dental issues."
-
-                else:
-                    risk = "LOW"
-                    findings = [
-                        "Healthy Tooth Structure",
-                        "No Plaque",
-                        "Normal Bone Density",
-                        "Stable Periodontal Condition"
-                    ]
-                    explanation = "Low variation and smooth structure indicate healthy condition."
-
-                # ---------- SCORES ----------
-                ann_score = brightness
-                cnn_score = contrast + edge_density
-
-                porosity = int(20 + contrast * 50)
-                viscosity = int(30 + edge_density * 50)
-                healing_days = int(5 + score * 20)
-
-                data = {
-                    "ann": ann_score,
-                    "cnn": cnn_score,
-                    "risk": risk,
-                    "findings": findings,
-                    "explanation": explanation,
-                    "porosity": porosity,
-                    "viscosity": viscosity,
-                    "healing": healing_days
-                }
-
-                st.session_state.memory[img_hash] = data
-
-        # ---------- VISUAL ----------
-        norm = gray / np.max(gray)
-
-        heat = (norm * 0.5 + (gray/255) * 0.5)
-        heat = heat / np.max(heat)
-
-        heatmap = np.zeros_like(img_array)
-        heatmap[:,:,0] = (heat ** 0.7) * 255
-        heatmap[:,:,1] = heat * 150
-        heatmap[:,:,2] = heat * 50
-
-        cnn_image = (img_array * 0.5 + heatmap * 0.7).astype(np.uint8)
-
-        ann_image = np.zeros_like(img_array)
-        ann_image[:,:,2] = gray
-        ann_image[:,:,1] = gray * 0.6
-        ann_image = ann_image.astype(np.uint8)
-
-        # ---------- DISPLAY ----------
-        st.markdown("## 🖼 AI Visualization")
-        c1, c2, c3 = st.columns(3)
-        c1.image(image, caption="Original")
-        c2.image(ann_image, caption="ANN View")
-        c3.image(cnn_image, caption="CNN Heatmap")
-
-        # ---------- SCORES ----------
-        st.markdown("## 🤖 AI Analysis")
-        st.write("ANN Confidence")
-        st.progress(int(data["ann"] * 100))
-        st.write("CNN Confidence")
-        st.progress(int(min(data["cnn"],1) * 100))
-
-        # ---------- PARAMETERS ----------
-        st.markdown("## 🧪 Dental Parameters")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Porosity", f'{data["porosity"]}%')
-        col2.metric("Viscosity", data["viscosity"])
-        col3.metric("Healing Days", f'{data["healing"]} days')
-
-        # ---------- FINDINGS ----------
-        st.markdown("## 🦷 Clinical Findings")
-        for f in data["findings"]:
-            st.write("• " + f)
-
-        # ---------- EXPLANATION ----------
-        st.markdown("## 🧠 Dentox AI Explanation")
-        st.info(data["explanation"])
-
-        # ---------- RESULT ----------
-        st.markdown("## 🧾 Diagnosis")
-        if data["risk"] == "LOW":
-            st.success("Healthy Condition")
-        elif data["risk"] == "MODERATE":
-            st.warning("Moderate Risk Detected")
-        else:
-            st.error("Severe Condition Detected")
-
-        # ---------- REPORT ----------
-        st.markdown("## 📄 Download Report")
-
-        report = f"""
-Dentox AI Report
-
-ANN Score: {data["ann"]:.2f}
-CNN Score: {data["cnn"]:.2f}
-
-Findings:
-{chr(10).join(data["findings"])}
-
-Explanation:
-{data["explanation"]}
-
-Final Risk: {data["risk"]}
-"""
-
-        st.download_button("Download Report", report, file_name="dentox_report.txt")
-
-else:
-    st.info("⬆ Upload image and click Analyze")
+    st.markdown('</div>', unsafe_allow_html=True)
